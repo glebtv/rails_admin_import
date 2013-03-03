@@ -162,6 +162,7 @@ module RailsAdminImport
               elsif object.save
                 logger.info "#{Time.now.to_s}: #{verb}d: #{object.send(label_method)}" if RailsAdminImport.config.logging
                 results[:success] << "#{verb}d: #{object.send(label_method)}"
+                object.after_import_save(row, map)
               else
                 logger.info "#{Time.now.to_s}: Failed to #{verb.downcase}: #{object.send(label_method)}. Errors: #{object.errors.full_messages.join(', ')}." if RailsAdminImport.config.logging
                 results[:error] << "Failed to #{verb.downcase}: #{object.send(label_method)}. Errors: #{object.errors.full_messages.join(', ')}."
@@ -208,7 +209,15 @@ module RailsAdminImport
         end
       end
     end
-    
+   
+    def before_import_save(*args)
+      # Meant to be overridden to do special actions
+    end
+
+    def after_import_save(*args)
+      # Meant to be overridden to do special actions
+    end
+
     def import_display
       self.id
     end

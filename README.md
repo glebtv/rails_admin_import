@@ -62,6 +62,18 @@ Installation
           end
         end
 
+* (Optional) Define instance methods to be hooked into the import process, if special/additional processing is required on the data:
+
+        # some model
+        def before_import_save(row, map)
+          self.set_permalink
+          self.import_nested_data(row, map)
+        end
+
+        def after_import_save(row, map)
+          
+        end
+
 * "import" action must be added inside config.actions block in main application RailsAdmin configuration: config/initializers/rails_admin.rb.
 
         config.actions do
