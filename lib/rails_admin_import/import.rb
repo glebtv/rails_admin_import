@@ -1,4 +1,5 @@
 require 'open-uri'
+require "rails_admin_import/import_logger"
   
 module RailsAdminImport
   module Import
@@ -73,13 +74,13 @@ module RailsAdminImport
 
           if RailsAdminImport.config.logging
             FileUtils.copy(params[:file].tempfile, "#{Rails.root}/log/import/#{Time.now.strftime("%Y-%m-%d-%H-%M-%S")}-import.csv")
-            logger = Logger.new("#{Rails.root}/log/import/import.log")
           end
 
           text        = File.read(params[:file].tempfile)
           clean       = text.force_encoding('BINARY').encode('UTF-8', :undef => :replace, :replace => '').gsub(/\n$/, '')
           file_check  = CSV.new(clean)
-
+          logger      = ImportLogger.new
+     
           if file_check.readlines.size > RailsAdminImport.config.line_item_limit
             return results = { :success => [], :error => ["Please limit upload file to #{RailsAdminImport.config.line_item_limit} line items."] }
           end
@@ -157,18 +158,18 @@ module RailsAdminImport
             
             if object.errors.empty?
               if skip_nested_save
-                logger.info "#{Time.now.to_s}: Skipped nested save: #{object.send(label_method)}" if RailsAdminImport.config.logging
+                logger.info "#{Time.now.to_s}: Skipped nested save: #{object.send(label_method)}"
                 results[:success] << "Skipped nested save: #{object.send(label_method)}"
               elsif object.save
-                logger.info "#{Time.now.to_s}: #{verb}d: #{object.send(label_method)}" if RailsAdminImport.config.logging
+                logger.info "#{Time.now.to_s}: #{verb}d: #{object.send(label_method)}"
                 results[:success] << "#{verb}d: #{object.send(label_method)}"
                 object.after_import_save(row, map)
               else
-                logger.info "#{Time.now.to_s}: Failed to #{verb.downcase}: #{object.send(label_method)}. Errors: #{object.errors.full_messages.join(', ')}." if RailsAdminImport.config.logging
+                logger.info "#{Time.now.to_s}: Failed to #{verb.downcase}: #{object.send(label_method)}. Errors: #{object.errors.full_messages.join(', ')}."
                 results[:error] << "Failed to #{verb.downcase}: #{object.send(label_method)}. Errors: #{object.errors.full_messages.join(', ')}."
               end
             else
-              logger.info "#{Time.now.to_s}: Errors before save: #{object.send(label_method)}. Errors: #{object.errors.full_messages.join(', ')}." if RailsAdminImport.config.logging
+              logger.info "#{Time.now.to_s}: Errors before save: #{object.send(label_method)}. Errors: #{object.errors.full_messages.join(', ')}."
               results[:error] << "Errors before save: #{object.send(label_method)}. Errors: #{object.errors.full_messages.join(', ')}."
             end
           end
@@ -177,10 +178,10 @@ module RailsAdminImport
             import_config.before_parent_save.call(parent_object, role, current_user) if import_config.before_parent_save
             
             if parent_object.save
-              logger.info "#{Time.now.to_s}: Saved #{parent_object.class.name}" if RailsAdminImport.config.logging
+              logger.info "#{Time.now.to_s}: Saved #{parent_object.class.name}"
               results[:success].unshift "Saved: #{parent_object}"
             else
-              logger.info "#{Time.now.to_s}: Failed to save #{parent_object.class.name}. Errors: #{parent_object.errors.full_messages.join(', ')}." if RailsAdminImport.config.logging
+              logger.info "#{Time.now.to_s}: Failed to save #{parent_object.class.name}. Errors: #{parent_object.errors.full_messages.join(', ')}."
               results[:error].unshift "Failed to save #{parent_object.class.name}. Errors: #{parent_object.errors.full_messages.join(', ')}."
             end
             
