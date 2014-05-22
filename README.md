@@ -8,17 +8,17 @@ Installation
 
 * First, add to Gemfile:
     
-        gem "rails_admin_import", :git => "git://github.com/joelvh/rails_admin_import.git"
+        gem "rails_admin_import"
 
 * Next, mount in your application by adding following line to your config/routes.rb:
 
         mount RailsAdminImport::Engine => '/rails_admin_import', :as => 'rails_admin_import'
 
-* Add to cancan to allow access to import in your app/models/ability.rb:
+* If you are using cancan, add to ability.rb to specify which models can be imported:
 
         can :import, [User, Model1, Model2]
 
-* Define configuration in config/initializers/rails_admin.rb:
+* Define configuration in config/initializers/rails_admin_import.rb:
 
         RailsAdminImport.config do |config| 
           config.model User do
@@ -66,12 +66,11 @@ Installation
 
         # some model
         def before_import_save(row, map)
-          self.set_permalink
-          self.import_nested_data(row, map)
+          # Your custom special sauce          
         end
 
         def after_import_save(row, map)
-          
+          # Your custom special sauce          
         end
 
 * "import" action must be added inside config.actions block in main application RailsAdmin configuration: config/initializers/rails_admin.rb.
@@ -98,4 +97,5 @@ TODO
 Copyright
 ========
 
-Copyright (c) 2012 End Point & Steph Skardal. See LICENSE.txt for further details.
+Copyright (c) 2014 End Point & Steph Skardal. See LICENSE.txt for further details.
+
