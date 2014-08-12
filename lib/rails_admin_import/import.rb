@@ -26,7 +26,11 @@ module RailsAdminImport
         if import_config.included_fields.any?
           fields = import_config.included_fields.dup
         else
-          fields = self.new.attributes.keys.collect { |key| key.to_sym }
+          if respond_to?(:fields)
+            fields = self.fields.keys.map(&:to_sym).reject { |f| [:_id, :id, :c_at, :u_at, :created_at, :updated_at].include?(f) }
+          else
+            fields = self.new.attributes.keys.map(&:to_sym)
+          end
         end
         
         self.belongs_to_fields.each do |key|
@@ -49,22 +53,22 @@ module RailsAdminImport
       end
  
       def belongs_to_fields(klass = self)
-        attrs = klass.model_associations.select{|k, v| [:belongs_to, :embedded_in].include?(v.macro) }.keys.collect(&:to_sym)
-        attrs.select{|attr| import_config.included_fields.include?(attr)}# - import_config.excluded_fields 
+        attrs = get_relations.select{|k, v| [:belongs_to, :embedded_in].include?(v.macro) }.keys.collect(&:to_sym)
+        attrs.reject { |attr| import_config.included_fields.include?(attr) }
       end
   
       def many_fields
         associations  = [:has_and_belongs_to_many, :has_many, :embeds_many]
-        attrs         = self.model_associations.select{|k, v| associations.include?(v.macro) }.keys.collect(&:to_sym)
-        attrs.select{|attr| import_config.included_fields.include?(attr)}# - import_config.excluded_fields 
+        attrs         = get_relations.select{|k, v| associations.include?(v.macro) }.keys.collect(&:to_sym)
+        attrs.reject { |attr| import_config.included_fields.include?(attr) }
       end
       
-      def model_associations
+      def get_relations
         # handle Mongoid or ActiveRecord
-        associations = self.respond_to?(:relations) ? self.relations : self.reflections
+        self.respond_to?(:relations) ? relations : reflections
       end
   
-      def run_import(params, role, current_user)
+      def run_import(params)
         logger = Rails.logger
         
         # begin
@@ -89,6 +93,8 @@ module RailsAdminImport
           file  = CSV.new(clean)
           
           file.readline.each_with_index do |key, i|
+            next if key.nil?
+
             if self.many_fields.include?(key.to_sym)
               map[key.to_sym] ||= []
               map[key.to_sym] << i
@@ -97,13 +103,8 @@ module RailsAdminImport
             end
           end
           
-          if import_config.update_lookup_field
-            lookup_field_name = import_config.update_lookup_field
-          elsif !params[:update_lookup].blank?
-            lookup_field_name = params[:update_lookup].to_sym
-          end
-          
-          if lookup_field_name && !map.has_key?(lookup_field_name)
+          update = params.has_key?(:update_if_exists) && params[:update_if_exists] ? params[:update_lookup].to_sym : nil
+          if update && !map.has_key?(params[:update_lookup].to_sym)
             return results = { :success => [], :error => ["Your file must contain a column for the 'Update lookup field' you selected."] }
           end 
     
@@ -122,23 +123,17 @@ module RailsAdminImport
           before_import_save  = import_config.before_import_save
           
           # handle nesting in parent object
-          if import_config.create_parent
-            parent_object = import_config.create_parent.call(role, current_user)
+          unless import_config.create_parent.nil?
+            parent_object = import_config.create_parent.call()
             nested_field  = import_config.nested_field
           end
           
           file.each do |row|
-            new_attrs = {}
-            
-            self.import_fields.each do |key|
-              new_attrs[key] = row[map[key]] if map[key]
-            end
-            
-            lookup_field_value = row[map[lookup_field_name]] unless lookup_field_name.blank?
-            
-            object = self.import_initialize(new_attrs, lookup_field_name, lookup_field_value)
+            object = self.import_initialize(row, map, update)
             object.import_belongs_to_data(associated_map, row, map)
             object.import_many_data(associated_map, row, map)
+            object.before_import_save(row, map)
+            object.import_files(row, map)
             
             if before_import_save
               before_import_save_args = [object, row, map, role, current_user]
@@ -155,7 +150,7 @@ module RailsAdminImport
             end
             
             verb = object.new_record? ? "Create" : "Update"
-            
+            p object
             if object.errors.empty?
               if skip_nested_save
                 logger.info "#{Time.now.to_s}: Skipped nested save: #{object.send(label_method)}"
@@ -198,16 +193,25 @@ module RailsAdminImport
         # end
       end
   
-      def import_initialize(new_attrs, lookup_field, lookup_value)
-        mass_assignment_role = RailsAdmin.config.attr_accessible_role.call
-        # model#where(lookup_field_name => value).first is more ORM compatible (works with Mongoid)
-        if lookup_field.present? && (item = self.send(:where, lookup_field => lookup_value).first)
-          item.assign_attributes new_attrs.except(lookup_field.to_sym), :as => mass_assignment_role
-          #item.save
-          item
-        else
-          item = self.new(new_attrs, :as => mass_assignment_role)
+      def import_initialize(row, map, update)
+        new_attrs = {}
+        self.import_fields.each do |key|
+          new_attrs[key] = row[map[key]] if map[key]
         end
+
+        item = nil
+        if update.present?
+          item = self.send("find_by_#{update}", row[map[update]])
+        end 
+
+        if item.nil?
+          item = self.new(new_attrs)
+        else
+          item.attributes = new_attrs.except(update.to_sym)
+          item.save
+        end
+
+        item
       end
     end
    

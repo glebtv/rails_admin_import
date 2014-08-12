@@ -1,0 +1,10 @@
+ru:
+  admin:
+    actions:
+      import:
+        title: "Импорт"
+        menu: "Импорт"
+        breadcrumb: "Импорт"
+        link: "Импорт"
+        bulk_link: "Импорт"
+        done: "Импортировано"
