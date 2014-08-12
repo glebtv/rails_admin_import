@@ -10,10 +10,6 @@ Installation
     
         gem "rails_admin_import"
 
-* Next, mount in your application by adding following line to your config/routes.rb:
-
-        mount RailsAdminImport::Engine => '/rails_admin_import', :as => 'rails_admin_import'
-
 * If you are using cancan, add to ability.rb to specify which models can be imported:
 
         can :import, [User, Model1, Model2]
