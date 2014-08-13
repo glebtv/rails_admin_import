@@ -67,6 +67,10 @@ module RailsAdminImport
         # handle Mongoid or ActiveRecord
         self.respond_to?(:relations) ? relations : reflections
       end
+
+      def get_model_for(field)
+        get_relations[field.to_s].class_name.constantize
+      end
   
       def run_import(params)
         logger = Rails.logger
@@ -112,11 +116,19 @@ module RailsAdminImport
           associated_map = {}
           
           self.belongs_to_fields.flatten.each do |field|
-            associated_map[field] = field.to_s.classify.constantize.all.inject({}) { |hash, c| hash[c.send(params[field]).to_s] = c.id; hash }
+            model = get_model_for(field)
+            associated_map[field] = model.all.inject({}) do |hash, c|
+              hash[c.send(params[field]).to_s] = c.id
+              hash
+            end
           end
           
           self.many_fields.flatten.each do |field|
-            associated_map[field] = field.to_s.classify.constantize.all.inject({}) { |hash, c| hash[c.send(params[field]).to_s] = c; hash }
+            model = get_model_for(field)
+            associated_map[field] = model.all.inject({}) do |hash, c|
+              hash[c.send(params[field]).to_s] = c
+              hash
+            end
           end
    
           label_method        = import_config.label
@@ -150,7 +162,7 @@ module RailsAdminImport
             end
             
             verb = object.new_record? ? "Create" : "Update"
-            p object
+
             if object.errors.empty?
               if skip_nested_save
                 logger.info "#{Time.now.to_s}: Skipped nested save: #{object.send(label_method)}"

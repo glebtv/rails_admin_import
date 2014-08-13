@@ -120,7 +120,8 @@
       <label class="control-label" for="csv_options_encoding_to"><a href="<%= url_for(:action => :index, :model_name => field) %>"><%= field.to_s.titleize %></a> mapping</label>
       <div class="controls">
         <select name="<%= field %>">
-          <% field.to_s.classify.constantize.new.attributes.keys.each do |key| -%>
+          <% model = @abstract_model.model.get_relations[field.to_s].class_name.constantize %>
+          <% (model.fields.keys - model.relations.keys).each do |key| -%>
           <option value="<%= key %>"><%= key %></option>
           <% end -%>
         </select>
